@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fire Detection Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        #output {
+            width: 640px;
+            height: 480px;
+            overflow: hidden;
+            border: 1px solid #ccc;
+            margin-top: 20px;
+        }
+        #video {
+            width: 100%;
+            height: 100%;
+        }
+        pre {
+            background: #f8f8f8;
+            padding: 10px;
+            border: 1px solid #ccc;
+            white-space: pre-wrap; /* 让文本换行 */
+            word-wrap: break-word; /* 防止长文本溢出 */
+            height: 200px; /* 固定高度 */
+            overflow-y: auto; /* 添加垂直滚动条 */
+        }
+
+    </style>
+</head>
+<body>
+    <h1>Fire Detection Test</h1>
+
+    <h2>Start Detection</h2>
+    <input type="text" id="streamUrl" placeholder="rtsp://127.0.0.1:8554/" />
+    <button onclick="startDetection()">Start Detection</button>
+
+    <pre id="detectionOutput" style="height: 200px; overflow-y: auto;"></pre>
+
+{#    <img id="video" width="640" height="480" alt="Fire Detection Video Stream" />#}
+    <video id="video" width="640" height="480" controls>
+
+    </video>
+
+    <script>
+        let detections = [];
+
+        function startDetection() {
+            const streamUrl = document.getElementById('streamUrl').value;
+
+            if (streamUrl) {
+                // 开始检测并渲染
+                // 启动渲染
+                fetch(`/firestream?streamUrl=${encodeURIComponent(streamUrl)}`)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Network response was not ok');
+                    }
+                    startRender(streamUrl);
+                    {#console.log("11111")#}
+                    return response.body.getReader(); // 获取可读流
+                })
+                .then(reader => {
+                    const decoder = new TextDecoder('utf-8');
+                    {#i=0;#}
+                    function read() {
+                        reader.read().then(({ done, value }) => {
+                            if (done) return;
+
+                            const jsonData = decoder.decode(value);
+                            const data = JSON.parse(jsonData);
+
+                            updateDetections(data); // 调用更新检测结果接口
+
+                            // 渲染每一帧
+                            renderResults(data);
+
+                            // 更新检测输出
+                            updateDetectionOutput(data)
+
+                            read(); // 继续读取
+                        });
+                    }
+                    read();
+                })
+                .catch(error => console.error('Error fetching detection data:', error));
+            } else {
+                alert('Please enter a stream URL');
+            }
+        }
+
+        function startRender(streamUrl) {
+            fetch('/start_render', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ streamUrl })
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                return response.json(); // 根据接口返回数据类型调整
+            })
+            .then(data => {
+                console.log('Render started:', data);
+            })
+            .catch(error => console.error('Error starting render:', error));
+        }
+
+        function updateDetections(detections) {
+            fetch('/update_detections', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ detections })
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                return response.json(); // 根据接口返回数据类型调整
+            })
+            .then(data => {
+                console.log('Detections updated:', data);
+            })
+            .catch(error => console.error('Error updating detections:', error));
+        }
+
+        function renderResults() {
+            const videoUrl = document.getElementById('streamUrl').value;
+
+            fetch(`/render?streamUrl=${encodeURIComponent(videoUrl)}`, {
+                method: 'GET'
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                return response.blob(); // 获取 Blob 数据
+            })
+            .then(blob => {
+                const video = document.getElementById('video');
+
+                // 先暂停当前视频播放
+                video.pause();
+
+                // 创建新的对象 URL
+                const newSrc = URL.createObjectURL(blob);
+
+                // 检查当前源是否相同
+                if (video.src !== newSrc) {
+                    video.src = newSrc; // 设置新源
+
+                    // 监听源加载完成事件
+                    video.onloadedmetadata = () => {
+                        video.play(); // 在源加载完成后播放
+                    };
+                }
+            })
+            .catch(error => console.error('Error fetching rendered video:', error));
+        }
+
+
+        function updateDetectionOutput(data) {
+            const outputDiv = document.getElementById('detectionOutput');
+            data.forEach(detection => {
+                const line = `Timestamp: ${detection.timestamp} | Detections: ${JSON.stringify(detection.detections)}\n`;
+                outputDiv.innerText += line; // 添加检测信息
+            });
+            outputDiv.scrollTop = outputDiv.scrollHeight; // 自动滚动到底部
+        }
+
+    </script>
+</body>
+</html>
+
+{#<!DOCTYPE html>#}
+{#<html lang="en">#}
+{#<head>#}
+{#    <meta charset="UTF-8">#}
+{#    <meta name="viewport" content="width=device-width, initial-scale=1.0">#}
+{#    <title>Fire Detection Stream</title>#}
+{#</head>#}
+{#<body>#}
+{#    <h1>Fire Detection Video Stream</h1>#}
+{##}
+{#    <!-- 输入框和按钮，用于输入视频流URL -->#}
+{#    <input type="text" id="streamUrl" placeholder="Enter stream URL" />#}
+{#    <button onclick="startStream()">Start Stream</button>#}
+{##}
+{#    <!-- 显示视频流的img标签 -->#}
+{#    <img id="video" width="640" height="480" alt="Fire Detection Video Stream" />#}
+{##}
+{#    <script>#}
+{#        function startStream() {#}
+{#            const streamUrl = document.getElementById('streamUrl').value;  // 获取输入框中的URL#}
+{##}
+{#            if (streamUrl) {#}
+{#                // 使用 GET 请求将 streamUrl 作为参数传递给后端#}
+{#                const video = document.getElementById('video');#}
+{#                video.src = `/firestream?streamUrl=${encodeURIComponent(streamUrl)}`;  // 设置 img 的 src 为后端返回的流#}
+{#            } else {#}
+{#                alert('Please enter a stream URL');#}
+{#            }#}
+{#        }#}
+{#    </script>#}
+{#</body>#}
+{#</html>#}

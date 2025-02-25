@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fire Detection Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        #output {
+            width: 640px;
+            height: 480px;
+            overflow: hidden;
+            border: 1px solid #ccc;
+            margin-top: 20px;
+        }
+        img {
+            width: 640px;
+            height: 480px;
+        }
+        pre {
+            background: #f8f8f8;
+            padding: 10px;
+            border: 1px solid #ccc;
+            white-space: pre-wrap; /* 让文本换行 */
+            word-wrap: break-word; /* 防止长文本溢出 */
+            width: 640px;
+            height: 200px; /* 固定高度 */
+            overflow-y: auto; /* 添加垂直滚动条 */
+        }
+    </style>
+</head>
+<body>
+    <h1>Video Stream with Detections</h1>
+
+    <input type="text" id="streamUrl" placeholder="rtsp://127.0.0.1:8554/video" />
+    <button onclick="startDetection()">Start Detection</button>
+    <pre id="detectionOutput" style="height: 200px; overflow-y: auto;"></pre>
+    <img id="video" />
+
+    <script>
+        function startDetection() {
+            // const streamUrl = document.getElementById('streamUrl').value;
+            const streamUrl = "rtsp://127.0.0.1:8554/video";
+            const video = document.getElementById('video');
+            video.src = `/video_feed?stream_url=${encodeURIComponent(streamUrl)}`;
+
+            updateDetections();
+        }
+
+        function updateDetections() {
+            fetch('/detections')
+                .then(response => response.json())
+                .then(detections => {
+                    const output = document.getElementById('detectionOutput');
+                    const lines = output.innerText.split('\n');
+                    if (lines.length > 20) {  // 只保留最近的 20 个结果
+                        lines.shift();
+                    }
+                    lines.push(JSON.stringify(detections, null, 0));
+                    output.innerText = lines.join('\n');
+                    output.scrollTop = output.scrollHeight; // 自动滚动到底部
+                    detections = null;
+                });
+
+            setTimeout(updateDetections, 2000);
+        }
+    </script>
+</body>
+</html>
